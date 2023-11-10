@@ -1,16 +1,24 @@
-import { MatchingQuery, MongoQueryBuilder } from "./model/MongoQueryBuilder";
+import { MongoQueryBuilder } from "./model/MongoQueryBuilder";
 
-const queryBuilder = MongoQueryBuilder.query({parentKey: 'erp'})
+const mongoQuery = MongoQueryBuilder.query({parentKey: 'erp'})
 
-//queryBuilder.or('standard', false)
-//queryBuilder.and('$and', {$and: queryBuilder.internalAnd({'delivery': false}).$and})
+const andQuery = MongoQueryBuilder.query(mongoQuery.options)
 
-queryBuilder.or
-    .equals('change', '00,00')
-    .is('delivery', true)
-    .match('_id', '123456', 'i')
-    .buildLogicalQuery()
+const orQuery = MongoQueryBuilder.query(mongoQuery.options)
 
-const query = queryBuilder.build()
+orQuery.is('delivery', true)
+orQuery.is('staff', true)
+orQuery.is('item.canceled', true)
+
+const standardQuery = MongoQueryBuilder.query(mongoQuery.options)
+    .is('delivery', false)
+    .is('staff', false)
+    .match('_id', '^\\d{8}(?!_cancelamentos)$', 'i')
+
+orQuery.and(standardQuery)
+
+mongoQuery.and(andQuery).or(orQuery)
+
+const query = mongoQuery.build()
 
 console.log(JSON.stringify(query, undefined, 4))

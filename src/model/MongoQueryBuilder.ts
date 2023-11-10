@@ -1,10 +1,4 @@
-export type MongoRegex = {[key: string]: {$regex: string, $options: string}}
-
 export type MongoQuery = Record<string, string | number | boolean | object | Array<MongoQuery>>
-
-export type MatchingQuery = Record<'$and' | '$or', Array<MongoQuery>>
-
-export type InnerMatchingQuery = Partial<MatchingQuery>
 
 export type QueryOptions = {parentKey?: string}
 
@@ -18,7 +12,6 @@ export class MongoQueryBuilder {
 
     equals(key: string, value: string | number): MongoQueryBuilder {
         const queryOperatorRegex = /(^\$[a-z]+$)|(^_id$)/
-
         const prefix = queryOperatorRegex.test(key) ? '' : this.options?.parentKey?.concat('.') || ''
 
         const queryKey = `${prefix}${key}`
@@ -63,14 +56,39 @@ export class MongoQueryBuilder {
         return this
     }
 
-    get and(): LogicalQueryBuilder {
-        return LogicalQueryBuilder.aLogicalQuery("$and", this)
+    and(query: MongoQueryBuilder): MongoQueryBuilder {
+        const queryArray: Array<MongoQuery> = [{}]
+
+        for(const key in query.props) {
+            const queryArrayIsEmpty = (Object.keys(queryArray[0]).length) === 0
+
+            const insertedQuery: MongoQuery = {}
+            insertedQuery[key] = query.props[key]
+
+            queryArrayIsEmpty ? queryArray[0] = insertedQuery : queryArray.push(insertedQuery)
+        }
+
+        this.props['$and'] = queryArray
+
+        return this
     }
 
-    get or(): LogicalQueryBuilder {
-        return LogicalQueryBuilder.aLogicalQuery("$or", this)
-    }
+    or(query: MongoQueryBuilder): MongoQueryBuilder {
+        const queryArray: Array<MongoQuery> = [{}]
 
+        for(const key in query.props) {
+            const queryArrayIsEmpty = (Object.keys(queryArray[0]).length) === 0
+
+            const insertedQuery: MongoQuery = {}
+            insertedQuery[key] = query.props[key]
+
+            queryArrayIsEmpty ? queryArray[0] = insertedQuery : queryArray.push(insertedQuery)
+        }
+
+        this.props['$or'] = queryArray
+
+        return this
+    }
 
     build(): MongoQuery {
         return this.props
@@ -81,86 +99,3 @@ export class MongoQueryBuilder {
     }
 
 }
-
-class LogicalQueryBuilder {
-
-    private constructor(private readonly operator: keyof MatchingQuery, private readonly motherQuery: MongoQueryBuilder, private readonly logicalQuery: MatchingQuery) {}
-
-    static aLogicalQuery(operator: keyof MatchingQuery, motherQuery: MongoQueryBuilder): LogicalQueryBuilder {
-        const logicalQuery: MatchingQuery = Object.create({})
-        logicalQuery[operator] = [{}]
-        return new LogicalQueryBuilder(operator, motherQuery, logicalQuery)
-    }
-
-    equals(key: string, value: string | number): LogicalQueryBuilder {
-        const query: MongoQuery = {}
-
-        const queryOperatorRegex = /(^\$[a-z]+$)|(^_id$)/
-
-        const prefix = queryOperatorRegex.test(key) ? '' : this.motherQuery.options?.parentKey?.concat('.') || ''
-
-        const queryKey = `${prefix}${key}`
-
-        query[queryKey] = value
-
-        const logicalQueryIsEmpty = (Object.keys(this.logicalQuery[this.operator][0]).length === 0)
-
-        if(logicalQueryIsEmpty) {
-            this.logicalQuery[this.operator][0] = query
-        } else {
-            this.logicalQuery[this.operator].push(query)
-        }
-        return this
-    }
-
-    is(key: string, value: boolean): LogicalQueryBuilder {
-        const query: MongoQuery = {}
-
-        const queryOperatorRegex = /(^\$[a-z]+$)|(^_id$)/
-
-        const prefix = queryOperatorRegex.test(key) ? '' : this.motherQuery.options?.parentKey?.concat('.') || ''
-
-        const queryKey = `${prefix}${key}`
-
-        query[queryKey] = value
-
-        const logicalQueryIsEmpty = (Object.keys(this.logicalQuery[this.operator][0]).length === 0)
-
-        if(logicalQueryIsEmpty) {
-            this.logicalQuery[this.operator][0] = query
-        } else {
-            this.logicalQuery[this.operator].push(query)
-        }
-        return this
-    }
-
-    match(key: string, regex: string, options: string): LogicalQueryBuilder {
-        const query: MongoQuery = {}
-
-        const queryOperatorRegex = /(^\$[a-z]+$)|(^_id$)/
-
-        const prefix = queryOperatorRegex.test(key) ? '' : this.motherQuery.options?.parentKey?.concat('.') || ''
-
-        const queryKey = `${prefix}${key}`
-        
-        query[queryKey] = {$regex: regex, $options: options}
-
-        const logicalQueryIsEmpty = (Object.keys(this.logicalQuery[this.operator][0]).length === 0)
-
-        if(logicalQueryIsEmpty) {
-            this.logicalQuery[this.operator][0] = query
-        } else {
-            this.logicalQuery[this.operator].push(query)
-        }
-        return this
-
-    }
-
-    buildLogicalQuery(): MongoQueryBuilder {
-        this.motherQuery.insertQuery(this.logicalQuery)
-
-        return this.motherQuery
-    }
-
-}
-
